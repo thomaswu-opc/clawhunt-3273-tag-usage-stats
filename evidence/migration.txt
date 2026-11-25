@@ -1,0 +1,60 @@
+$ alembic upgrade head --sql
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Generating static SQL
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+BEGIN;
+
+CREATE TABLE alembic_version (
+    version_num VARCHAR(32) NOT NULL, 
+    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+);
+
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_taxonomy_tag_stats, taxonomy_tag_stats
+-- Running upgrade  -> 0001_taxonomy_tag_stats
+
+CREATE TABLE taxonomy_tag_stats (
+    id BIGSERIAL NOT NULL, 
+    tag_id UUID NOT NULL, 
+    dict_code VARCHAR(64) NOT NULL, 
+    stat_date DATE NOT NULL, 
+    counts JSONB NOT NULL, 
+    total INTEGER DEFAULT '0' NOT NULL, 
+    new_30d INTEGER DEFAULT '0' NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    PRIMARY KEY (id), 
+    CONSTRAINT uq_tag_stats_tag_day UNIQUE (tag_id, stat_date), 
+    CONSTRAINT ck_tag_stats_non_negative CHECK (total >= 0 AND new_30d >= 0), 
+    CONSTRAINT ck_tag_stats_window_subset CHECK (new_30d <= total)
+);
+
+COMMENT ON COLUMN taxonomy_tag_stats.counts IS '{"company":n,"supply_demand":n,"capability_card":n,"activity":n}';
+
+CREATE INDEX ix_tag_stats_dict_day ON taxonomy_tag_stats (dict_code, stat_date);
+
+CREATE INDEX ix_tag_stats_day_total ON taxonomy_tag_stats (stat_date, total);
+
+INSERT INTO alembic_version (version_num) VALUES ('0001_taxonomy_tag_stats') RETURNING alembic_version.version_num;
+
+COMMIT;
+
+
+$ alembic downgrade 0001_taxonomy_tag_stats:base --sql
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Generating static SQL
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+BEGIN;
+
+INFO  [alembic.runtime.migration] Running downgrade 0001_taxonomy_tag_stats -> , taxonomy_tag_stats
+-- Running downgrade 0001_taxonomy_tag_stats -> 
+
+DROP INDEX ix_tag_stats_day_total;
+
+DROP INDEX ix_tag_stats_dict_day;
+
+DROP TABLE taxonomy_tag_stats;
+
+DELETE FROM alembic_version WHERE alembic_version.version_num = '0001_taxonomy_tag_stats';
+
+COMMIT;
+

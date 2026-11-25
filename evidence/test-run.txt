@@ -1,0 +1,22 @@
+$ python -m unittest discover -s tests -t . -v
+# 2026-11-25T18:29:44+08:00
+E:\ClawHunt\acceptance\2824\work\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_ac1_refs_outside_window_still_count_in_total (tests.test_acceptance.AC1MatchesHandCount.test_ac1_refs_outside_window_still_count_in_total)
+窗口只影响 new_30d，不影响 total —— 口径容易写反的地方。 ... ok
+test_ac1_stats_equal_hand_count (tests.test_acceptance.AC1MatchesHandCount.test_ac1_stats_equal_hand_count) ... ok
+test_ac2_top_referenced_is_stable_on_ties (tests.test_acceptance.AC2ZeroReferenceList.test_ac2_top_referenced_is_stable_on_ties) ... ok
+test_ac2_zero_reference_tags (tests.test_acceptance.AC2ZeroReferenceList.test_ac2_zero_reference_tags) ... ok
+test_ac3_new_day_does_not_touch_old_day (tests.test_acceptance.AC3RerunIsIdempotent.test_ac3_new_day_does_not_touch_old_day) ... ok
+test_ac3_second_run_changes_nothing (tests.test_acceptance.AC3RerunIsIdempotent.test_ac3_second_run_changes_nothing) ... ok
+test_stats_not_ready_before_job_runs (tests.test_acceptance.ApiContract.test_stats_not_ready_before_job_runs) ... ok
+test_tag_stats_200_and_404 (tests.test_acceptance.ApiContract.test_tag_stats_200_and_404) ... ok
+test_top_tags_limit (tests.test_acceptance.ApiContract.test_top_tags_limit) ... ok
+test_dict_stats_endpoint (tests.test_http.HttpLayer.test_dict_stats_endpoint) ... ok
+test_tag_stats_endpoint (tests.test_http.HttpLayer.test_tag_stats_endpoint) ... ok
+test_unknown_tag_404 (tests.test_http.HttpLayer.test_unknown_tag_404) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.274s
+
+OK

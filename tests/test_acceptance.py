@@ -18,25 +18,34 @@ def ts(y, m, d) -> datetime:
     return datetime(y, m, d, 12, 0, tzinfo=timezone.utc)
 
 
+SAMPLE_TAGS = [("T1", "industry"), ("T2", "industry"), ("T3", "industry"),
+               ("T4", "industry"), ("T5", "industry"), ("T6", "service")]
+
+SAMPLE_REFS = [
+    ("T1", "company", "c1", ts(2026, 11, 20)),
+    ("T1", "company", "c2", ts(2026, 11, 1)),
+    ("T1", "supply_demand", "s1", ts(2026, 10, 1)),      # 窗口外
+    ("T2", "company", "c3", ts(2026, 9, 15)),            # 窗口外
+    ("T3", "supply_demand", "s2", ts(2026, 11, 24)),
+    ("T3", "capability_card", "k1", ts(2026, 11, 2)),
+    ("T4", "capability_card", "k2", ts(2026, 10, 30)),
+    ("T4", "activity", "a1", ts(2026, 11, 10)),
+    ("T4", "activity", "a2", ts(2026, 11, 11)),
+    ("T6", "activity", "a3", ts(2026, 11, 5)),
+]
+
+
+def seed(store) -> None:
+    """给任意 store 灌入同一份样例事实，保证内存/数据库两条路径口径可比。"""
+    for tag_id, dict_code in SAMPLE_TAGS:
+        store.add_tag(tag_id, dict_code)
+    for tag_id, source, ref_id, created in SAMPLE_REFS:
+        store.add_ref(TagRef(tag_id=tag_id, source=source, ref_id=ref_id, created_at=created))
+
+
 def build_store() -> MemoryStore:
     store = MemoryStore()
-    for tag_id, dict_code in [("T1", "industry"), ("T2", "industry"), ("T3", "industry"),
-                              ("T4", "industry"), ("T5", "industry"), ("T6", "service")]:
-        store.add_tag(tag_id, dict_code)
-    rows = [
-        ("T1", "company", "c1", ts(2026, 11, 20)),
-        ("T1", "company", "c2", ts(2026, 11, 1)),
-        ("T1", "supply_demand", "s1", ts(2026, 10, 1)),      # 窗口外
-        ("T2", "company", "c3", ts(2026, 9, 15)),            # 窗口外
-        ("T3", "supply_demand", "s2", ts(2026, 11, 24)),
-        ("T3", "capability_card", "k1", ts(2026, 11, 2)),
-        ("T4", "capability_card", "k2", ts(2026, 10, 30)),
-        ("T4", "activity", "a1", ts(2026, 11, 10)),
-        ("T4", "activity", "a2", ts(2026, 11, 11)),
-        ("T6", "activity", "a3", ts(2026, 11, 5)),
-    ]
-    for tag_id, source, ref_id, created in rows:
-        store.add_ref(TagRef(tag_id=tag_id, source=source, ref_id=ref_id, created_at=created))
+    seed(store)
     return store
 
 

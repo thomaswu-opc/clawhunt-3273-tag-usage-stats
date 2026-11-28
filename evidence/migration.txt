@@ -1,60 +1,53 @@
-$ alembic upgrade head --sql
+# PostgreSQL 16 在线迁移验证（非 --sql 离线渲染）
+# 2026-11-28T12:51:09+08:00
+# 本机实例：pgserver 0.1.4 内置 PostgreSQL 16.2；连接串由 DATABASE_URL 提供
+# 解释器：Python 3.12.9 / alembic 1.20.1
+
+$ .venv/Scripts/python.exe -c "SHOW server_version"
+16.2
+
+$ .venv/Scripts/alembic.exe downgrade base
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Generating static SQL
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
-BEGIN;
-
-CREATE TABLE alembic_version (
-    version_num VARCHAR(32) NOT NULL, 
-    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
-);
-
-INFO  [alembic.runtime.migration] Running upgrade  -> 0001_taxonomy_tag_stats, taxonomy_tag_stats
--- Running upgrade  -> 0001_taxonomy_tag_stats
-
-CREATE TABLE taxonomy_tag_stats (
-    id BIGSERIAL NOT NULL, 
-    tag_id UUID NOT NULL, 
-    dict_code VARCHAR(64) NOT NULL, 
-    stat_date DATE NOT NULL, 
-    counts JSONB NOT NULL, 
-    total INTEGER DEFAULT '0' NOT NULL, 
-    new_30d INTEGER DEFAULT '0' NOT NULL, 
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-    PRIMARY KEY (id), 
-    CONSTRAINT uq_tag_stats_tag_day UNIQUE (tag_id, stat_date), 
-    CONSTRAINT ck_tag_stats_non_negative CHECK (total >= 0 AND new_30d >= 0), 
-    CONSTRAINT ck_tag_stats_window_subset CHECK (new_30d <= total)
-);
-
-COMMENT ON COLUMN taxonomy_tag_stats.counts IS '{"company":n,"supply_demand":n,"capability_card":n,"activity":n}';
-
-CREATE INDEX ix_tag_stats_dict_day ON taxonomy_tag_stats (dict_code, stat_date);
-
-CREATE INDEX ix_tag_stats_day_total ON taxonomy_tag_stats (stat_date, total);
-
-INSERT INTO alembic_version (version_num) VALUES ('0001_taxonomy_tag_stats') RETURNING alembic_version.version_num;
-
-COMMIT;
-
-
-$ alembic downgrade 0001_taxonomy_tag_stats:base --sql
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Generating static SQL
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
-BEGIN;
-
 INFO  [alembic.runtime.migration] Running downgrade 0001_taxonomy_tag_stats -> , taxonomy_tag_stats
--- Running downgrade 0001_taxonomy_tag_stats -> 
 
-DROP INDEX ix_tag_stats_day_total;
+$ .venv/Scripts/alembic.exe upgrade head
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_taxonomy_tag_stats, taxonomy_tag_stats
 
-DROP INDEX ix_tag_stats_dict_day;
+$ .venv/Scripts/alembic.exe current
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+0001_taxonomy_tag_stats (head)
 
-DROP TABLE taxonomy_tag_stats;
+$ .venv/Scripts/alembic.exe check
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.schemas
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.tables
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+INFO  [alembic.ddl.postgresql] Detected sequence named 'taxonomy_tag_stats_id_seq' as owned by integer column 'taxonomy_tag_stats(id)', assuming SERIAL and omitting
+No new upgrade operations detected.
 
-DELETE FROM alembic_version WHERE alembic_version.version_num = '0001_taxonomy_tag_stats';
+$ .venv/Scripts/alembic.exe downgrade -1
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 0001_taxonomy_tag_stats -> , taxonomy_tag_stats
 
-COMMIT;
+$ .venv/Scripts/alembic.exe current
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
 
+$ .venv/Scripts/alembic.exe upgrade head
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_taxonomy_tag_stats, taxonomy_tag_stats
+
+$ .venv/Scripts/alembic.exe current
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+0001_taxonomy_tag_stats (head)

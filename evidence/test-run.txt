@@ -1,22 +1,45 @@
-$ python -m unittest discover -s tests -t . -v
-# 2026-11-25T18:29:44+08:00
-E:\ClawHunt\acceptance\2824\work\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
-  from starlette.testclient import TestClient as TestClient  # noqa
-test_ac1_refs_outside_window_still_count_in_total (tests.test_acceptance.AC1MatchesHandCount.test_ac1_refs_outside_window_still_count_in_total)
-窗口只影响 new_30d，不影响 total —— 口径容易写反的地方。 ... ok
-test_ac1_stats_equal_hand_count (tests.test_acceptance.AC1MatchesHandCount.test_ac1_stats_equal_hand_count) ... ok
-test_ac2_top_referenced_is_stable_on_ties (tests.test_acceptance.AC2ZeroReferenceList.test_ac2_top_referenced_is_stable_on_ties) ... ok
-test_ac2_zero_reference_tags (tests.test_acceptance.AC2ZeroReferenceList.test_ac2_zero_reference_tags) ... ok
-test_ac3_new_day_does_not_touch_old_day (tests.test_acceptance.AC3RerunIsIdempotent.test_ac3_new_day_does_not_touch_old_day) ... ok
-test_ac3_second_run_changes_nothing (tests.test_acceptance.AC3RerunIsIdempotent.test_ac3_second_run_changes_nothing) ... ok
-test_stats_not_ready_before_job_runs (tests.test_acceptance.ApiContract.test_stats_not_ready_before_job_runs) ... ok
-test_tag_stats_200_and_404 (tests.test_acceptance.ApiContract.test_tag_stats_200_and_404) ... ok
-test_top_tags_limit (tests.test_acceptance.ApiContract.test_top_tags_limit) ... ok
-test_dict_stats_endpoint (tests.test_http.HttpLayer.test_dict_stats_endpoint) ... ok
-test_tag_stats_endpoint (tests.test_http.HttpLayer.test_tag_stats_endpoint) ... ok
-test_unknown_tag_404 (tests.test_http.HttpLayer.test_unknown_tag_404) ... ok
+# 验收用例：SQLAlchemy 2 持久化实现 + 真实 PostgreSQL 16
+# 2026-11-28T12:51:22+08:00
+# DATABASE_URL 指向已 alembic upgrade head 的库；测试不调用 create_all
+$ .venv/Scripts/python.exe -m pytest tests/ -v
+============================= test session starts =============================
+platform win32 -- Python 3.12.9, pytest-9.2.0, pluggy-1.7.0 -- E:\ClawHunt\acceptance\3273\work\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: E:\ClawHunt\acceptance\3273\work
+plugins: anyio-4.16.0, platformdirs-4.14.9
+collecting ... collected 18 items
 
-----------------------------------------------------------------------
-Ran 12 tests in 0.274s
+tests/test_acceptance.py::AC1MatchesHandCount::test_ac1_refs_outside_window_still_count_in_total PASSED [  5%]
+tests/test_acceptance.py::AC1MatchesHandCount::test_ac1_stats_equal_hand_count PASSED [ 11%]
+tests/test_acceptance.py::AC2ZeroReferenceList::test_ac2_top_referenced_is_stable_on_ties PASSED [ 16%]
+tests/test_acceptance.py::AC2ZeroReferenceList::test_ac2_zero_reference_tags PASSED [ 22%]
+tests/test_acceptance.py::AC3RerunIsIdempotent::test_ac3_new_day_does_not_touch_old_day PASSED [ 27%]
+tests/test_acceptance.py::AC3RerunIsIdempotent::test_ac3_second_run_changes_nothing PASSED [ 33%]
+tests/test_acceptance.py::ApiContract::test_stats_not_ready_before_job_runs PASSED [ 38%]
+tests/test_acceptance.py::ApiContract::test_tag_stats_200_and_404 PASSED [ 44%]
+tests/test_acceptance.py::ApiContract::test_top_tags_limit PASSED        [ 50%]
+tests/test_http.py::HttpLayer::test_dict_stats_endpoint PASSED           [ 55%]
+tests/test_http.py::HttpLayer::test_tag_stats_endpoint PASSED            [ 61%]
+tests/test_http.py::HttpLayer::test_unknown_tag_404 PASSED               [ 66%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_ac1_postgres_matches_hand_count PASSED [ 72%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_ac1_postgres_outside_window_still_counted PASSED [ 77%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_ac2_postgres_zero_reference_tags PASSED [ 83%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_ac3_postgres_rerun_is_idempotent PASSED [ 88%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_http_endpoints_against_persisted_table PASSED [ 94%]
+tests/test_postgres_acceptance.py::PostgresAcceptance::test_read_handlers_query_table_not_memory PASSED [100%]
 
-OK
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  E:\ClawHunt\acceptance\3273\work\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 18 passed, 1 warning in 1.69s ========================
+
+$ .venv/Scripts/python.exe -c "SELECT stat_date, tag_id, total, new_30d FROM taxonomy_tag_stats ORDER BY 1,2"
+(datetime.date(2026, 11, 25), UUID('139cd64b-e233-5189-9632-fd760cacf344'), 2, 2)
+(datetime.date(2026, 11, 25), UUID('45ec8067-0def-52ee-b4a2-0ac51cd3e1d0'), 0, 0)
+(datetime.date(2026, 11, 25), UUID('7a3b9ca5-2b2d-5380-b63e-0d9f3ecd3b7e'), 1, 1)
+(datetime.date(2026, 11, 25), UUID('90d355ee-24ae-5c64-abf3-ad71a0506404'), 3, 2)
+(datetime.date(2026, 11, 25), UUID('dae4bec4-69c5-5036-bfa3-9761a0028b14'), 3, 3)
+(datetime.date(2026, 11, 25), UUID('eb4a1d3d-19f2-52b5-8ff1-773b24dce7c2'), 1, 0)

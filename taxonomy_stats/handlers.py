@@ -6,11 +6,11 @@
 from __future__ import annotations
 
 from taxonomy_stats.aggregate import top_tags, zero_ref_tags
-from taxonomy_stats.store import MemoryStore
 
 
-def handle_tag_stats(store: MemoryStore, tag_id: str) -> tuple[int, dict]:
-    if tag_id not in store.tags:
+def handle_tag_stats(store, tag_id: str) -> tuple[int, dict]:
+    """读路径：统计值来自 store.latest_for()，持久化实现下即 taxonomy_tag_stats 表。"""
+    if not store.has_tag(tag_id):
         return 404, {"error": "TAG_NOT_FOUND", "message": "标签不存在：%s" % tag_id}
     stat = store.latest_for(tag_id)
     if stat is None:
@@ -18,9 +18,9 @@ def handle_tag_stats(store: MemoryStore, tag_id: str) -> tuple[int, dict]:
     return 200, stat.to_row()
 
 
-def handle_dict_stats(store: MemoryStore, dict_code: str, limit: int = 10) -> tuple[int, dict]:
-    known = {t for t, code in store.tags.items() if code == dict_code}
-    if not known:
+def handle_dict_stats(store, dict_code: str, limit: int = 10) -> tuple[int, dict]:
+    """读路径：行集合来自 store.day_rows()，持久化实现下即 taxonomy_tag_stats 表。"""
+    if not store.tag_ids_for_dict(dict_code):
         return 404, {"error": "DICT_NOT_FOUND", "message": "字典不存在或无标签：%s" % dict_code}
     latest = store.latest_day()
     if latest is None:

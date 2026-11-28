@@ -8,14 +8,32 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date
+from typing import Protocol
 
 from taxonomy_stats.aggregate import aggregate
-from taxonomy_stats.models import TagStat
-from taxonomy_stats.store import MemoryStore
+from taxonomy_stats.models import TagRef, TagStat
 
 
-def run_daily(store: MemoryStore, stat_date: date, days: int = 30) -> dict:
-    """执行一天的统计，返回可直接比对的摘要（用于证明幂等）。"""
+class DailyStore(Protocol):
+    """每日任务对存储的依赖面：来源事实 + 按日替换结果 + 读回结果。
+
+    MemoryStore（零依赖口径复现）与 SqlAlchemyStore（PostgreSQL 落库）都满足该协议。
+    """
+
+    tags: dict[str, str]
+    refs: list[TagRef]
+
+    def replace_day(self, stat_date: date, rows: dict[str, TagStat]) -> None: ...
+
+    def day_rows(self, stat_date: date) -> list[TagStat]: ...
+
+
+def run_daily(store: DailyStore, stat_date: date, days: int = 30) -> dict:
+    """执行一天的统计，返回可直接比对的摘要（用于证明幂等）。
+
+    摘要取自 replace_day() 之后的 day_rows()：持久化实现下是写库再读回的行，
+    不是对内存中间结果取哈希，因此 digest 一致也证明落库内容一致。
+    """
     rows: dict[str, TagStat] = aggregate(store.refs, store.tags, stat_date, days)
     store.replace_day(stat_date, rows)
     payload = [r.to_row() for r in store.day_rows(stat_date)]

@@ -22,7 +22,9 @@ if config.config_file_name is not None:
     except Exception:  # noqa: BLE001  离线场景可以没有 logging 配置
         pass
 
-target_metadata = None
+from taxonomy_stats.sqlalchemy_store import Base  # noqa: E402  与生产 ORM 模型共用元数据
+
+target_metadata = Base.metadata
 
 
 def _url() -> str:

@@ -1,62 +1,91 @@
-# 标签使用统计 · #3273
+# 标签使用统计 · #3273（v2：SQLAlchemy 2 持久化）
 
-对应工单 **S2-TAX-013**。范围限定在「每日统计任务 → taxonomy_tag_stats → 两个只读接口」，
-标签本体与引用来源的写入（S2-TAX-002、S2-CRM）不在本单内，用样例引用事实代替。
+对应工单 **S2-TAX-013**。范围：每日统计任务 → `taxonomy_tag_stats` → 两个只读接口。
+标签本体与引用来源的写入（S2-TAX-002、S2-CRM）不在本单内，用接口桩/样例事实代替。
 
-## 1. 目录
+## 1. v2 修了什么（针对第 1/3 轮返工）
+
+| 评审意见 | v2 处理 | 位置 |
+|---|---|---|
+| [blocker] 迁移建表后没有任何代码写入/读取，只有 `MemoryStore` | 新增 SQLAlchemy 2 ORM 与持久化仓储；`run_daily()` 真的 `DELETE 当天 + INSERT` 到 `taxonomy_tag_stats`，两个只读接口经仓储查询该表 | `taxonomy_stats/sqlalchemy_store.py`、`service.py`、`handlers.py` |
+| [major] 只做了 `alembic --sql` 离线渲染、测试跑在内存实现上 | 在真实 PostgreSQL 16.2 上执行 `downgrade base` → `upgrade head` → `check` → `downgrade -1` → `upgrade head`；18 个用例在迁移后的库上重跑（不调用 `create_all`） | `evidence/migration.txt`、`evidence/test-run.txt` |
+
+ORM 模型与 0001 迁移逐列对齐（唯一约束、两个 CHECK、两个索引、`counts` 列注释），
+`alembic check` 输出 `No new upgrade operations detected.`
+
+## 2. 目录
 
 ```
-taxonomy_stats/models.py     TagRef（引用事实）、TagStat（结果行）、SOURCES、30 天窗口
-taxonomy_stats/aggregate.py  统计口径（纯函数）+ top_tags / zero_ref_tags
-taxonomy_stats/store.py      存储边界：结果按 (tag_id, stat_date) 唯一，按日替换
-taxonomy_stats/service.py    每日任务 run_daily，返回可逐字比对的 digest
-taxonomy_stats/handlers.py   用例层（框架无关）：(status, body)
-taxonomy_stats/routes.py     FastAPI 适配层（两个只读接口）
-tests/test_acceptance.py     三条验收标准 + 口径边界
-tests/test_http.py           HTTP 层（缺 fastapi 时整类跳过）
+taxonomy_stats/models.py            TagRef / TagStat / SOURCES / 30 天窗口
+taxonomy_stats/aggregate.py         统计口径（纯函数）+ top_tags / zero_ref_tags
+taxonomy_stats/store.py             MemoryStore：零依赖口径复现适配器
+taxonomy_stats/sqlalchemy_store.py  SQLAlchemy 2 持久化仓储（生产适配器，v2 新增）
+taxonomy_stats/service.py           run_daily(store, stat_date, days) —— 写库后读回并算 digest
+taxonomy_stats/handlers.py          两个只读用例层接口（读路径打到结果表）
+taxonomy_stats/routes.py            FastAPI 适配层
+tests/test_acceptance.py            口径边界与三条 AC（内存实现，零依赖）
+tests/test_postgres_acceptance.py   三条 AC 在 PostgreSQL 上的重跑（v2 新增）
 alembic/versions/0001_taxonomy_tag_stats.py
+evidence/{migration,test-run,gate}.txt
 ```
 
-## 2. 口径（容易写反的两处）
+## 3. 口径（容易写反的两处）
 
 | 指标 | 定义 | 陷阱 |
 |---|---|---|
-| `counts` / `total` | 四个来源的引用次数与总和，**全量**，不受时间窗口影响 | 把窗口套到 total 上，会让老标签的引用凭空消失 |
-| `new_30d` | `created_at >= stat_date - 29 天` 的引用次数 | 窗口是 30 天含当天，不是 31 天；用 `-30` 会多算一天 |
-| `zero_reference` | `total == 0` 的标签，按 tag_id 升序 | 用 `new_30d == 0` 筛会把"老标签"误判成"零引用"，清理时误停用 |
-| `top_referenced` | 按 `total` 降序，**同分按 tag_id 升序** | 同分不定序 → 两次调用顺序不同，前端展示抖动 |
+| `counts` / `total` | 四来源（company / supply_demand / capability_card / activity）引用次数与总和，**全量** | 把窗口套到 total 上会让老标签引用消失 |
+| `new_30d` | `created_at >= stat_date - 29 天` 的引用次数 | 30 天含当天；用 `-30` 会多算一天 |
+| `zero_reference` | `total == 0`，按 tag_id 升序 | 用 `new_30d == 0` 会把老标签误判可删 |
+| `top_referenced` | 按 total 降序，同分按 tag_id 升序 | 同分不定序会导致展示抖动 |
 
-## 3. 幂等怎么保证（AC-3）
+写库时 `tag_id` 按统一技术约定存 UUID：样例业务标签 T1…T6 经固定命名空间
+`uuid5` 映射为确定性 UUID，重跑/补跑不漂移；UUID → 业务 id 用上游标签登记反查，
+未知 UUID 不暴露成业务标签。
 
-不是「先查有没有再插」，而是**按日整批替换**：`replace_day()` 先删该 `stat_date` 的全部行，再整批写入。
-配合表上的 `uq_tag_stats_tag_day (tag_id, stat_date)`，重跑同一天只可能覆盖，不可能插重。
-`run_daily()` 返回对当日全部行做 sha256 得到的 `digest`，两次运行 digest 相同即为幂等证据。
-
-## 4. 运行与测试
+## 4. 运行与复核（PostgreSQL 16）
 
 ```bash
-python -m unittest discover -s tests -t . -v        # 9 passed（零第三方依赖）
-python -m pip install fastapi httpx                 # 可选：跑 HTTP 层 3 个用例
-DATABASE_URL='postgresql+psycopg://u:p@localhost:5432/tax' alembic upgrade head --sql
-DATABASE_URL='postgresql+psycopg://u:p@localhost:5432/tax' alembic downgrade 0001_taxonomy_tag_stats:base --sql
+python -m pip install -r requirements.txt
+export DATABASE_URL='postgresql+psycopg://user:pass@localhost:5432/tax'
+
+alembic downgrade base          # 从空库开始，可选
+alembic upgrade head            # 真跑迁移，不是 --sql 渲染
+alembic check                   # ORM 映射与库结构一致：No new upgrade operations detected.
+alembic downgrade -1            # 可逆性验证
+alembic upgrade head            # 回到 head
+
+python -m pytest tests/ -v      # 18 passed：12 个口径/HTTP 用例 + 6 个 PostgreSQL 落库用例
 ```
 
-## 5. 验收对照
+本机验证用 `pgserver>=0.1.4`（内置 PostgreSQL 16.2 + pgvector，免管理员权限）起实例：
 
-| # | 验收原文 | 用例 | 实测 |
+```python
+import pgserver, time
+db = pgserver.get_server("/path/to/pgdata")
+print(db.get_uri())             # 拼成 postgresql+psycopg://... 写入 DATABASE_URL
+time.sleep(3600)                # 验证期间保持服务存活
+```
+
+不设 `DATABASE_URL` 时，`tests/test_postgres_acceptance.py` 整类跳过，
+其余 12 个用例仍零依赖可跑（`12 passed, 6 skipped`）。
+测试只连接迁移后的库，**不调用 `create_all`**：表必须由 Alembic 建出来。
+
+## 5. 验收对照（三条 AC 在 PostgreSQL 上的实测）
+
+| # | 验收原文 | 落库用例 | 实测 |
 |---|---|---|---|
-| 1 | 统计结果与样例数据的手工计数一致（测试通过） | `test_ac1_stats_equal_hand_count`、`test_ac1_refs_outside_window_still_count_in_total` | 6 个标签 × 4 来源 × (total, new_30d) 逐格等于手算表；总数 10 == 样例引用条数；窗口外引用计入 total 但不计入 new_30d |
-| 2 | 零引用标签列表正确（测试通过） | `test_ac2_zero_reference_tags`、`test_ac2_top_referenced_is_stable_on_ties` | 返回 `["T5"]`（T5 无任何引用）；top 列表同分时按 tag_id 升序稳定 |
-| 3 | 统计任务重复运行结果不变（测试通过） | `test_ac3_second_run_changes_nothing`、`test_ac3_new_day_does_not_touch_old_day` | 两次 digest 相同、行数不变、表内 6 行；跑新的一天不影响旧日结果 |
+| 1 | 统计结果与样例数据的手工计数一致 | `test_ac1_postgres_matches_hand_count`、`test_ac1_postgres_outside_window_still_counted` | 6 标签 × 4 来源 × (total,new_30d) 逐格等于写死的 `HAND` 表；总引用数 10；窗口外引用计入 total 不计入 new_30d；直接查库 6 行 |
+| 2 | 零引用标签列表正确 | `test_ac2_postgres_zero_reference_tags` | 从结果表读出 `zero_reference=["T5"]`、`tag_count=5`、top 顺序 `T1,T4,T3,T2` 稳定 |
+| 3 | 统计任务重复运行结果不变 | `test_ac3_postgres_rerun_is_idempotent` | 两次 digest/row_count 相同、逐行一致；库内仍 6 行无重复；跑新一天不动旧一天 |
+| 接口 | 两个只读接口从结果表读 | `test_read_handlers_query_table_not_memory`、`test_http_endpoints_against_persisted_table` | 新开一个无任何内存统计的仓储，接口仍能读出刚落库的结果；HTTP 层同样通过 |
 
-## 6. 边界与取舍
+证据是原始输出：`evidence/migration.txt`（真实 upgrade/downgrade/check）、
+`evidence/test-run.txt`（18 passed + 直接查表的行）、`evidence/gate.txt`（GATE: PASS）。
 
-- **脏数据不放大**：引用里出现未知 `tag_id` 直接忽略，不新建统计行 —— 否则清理零引用时会被幽灵标签干扰。
-- **无引用不删行**：`total=0` 的标签照样写一行，前端才能展示"零引用"；缺行与零值是两种语义。
-- **统计日期来自调用方**：`run_daily(store, stat_date)` 显式传入，不在函数里取 `today()`，补跑与回放才能重现。
-- **只读接口无权限码**：与知识管理员角色一致；写入口（标签 CRUD）属于别的工单。
+## 6. 边界与对接点
 
-## 7. 不在本单范围
-
-标签 CRUD 与字典层级（S2-TAX-001/002）、引用来源的写入与去重（S2-CRM）、
-定时调度器实现（用 cron / 平台调度调用 `run_daily` 即可）、前端页面。
+- 来源事实（tags / refs）仍是上游 S2-TAX-002 / S2-CRM 的接口桩；接生产时把 `store.tags` / `store.refs`
+  换成对四张来源表的查询即可，`aggregate()` 与 `run_daily()` 不变。
+- 统计日期由调用方显式传入；挂调度每日 01:00 调 `run_daily(store, yesterday)`。
+- 脏 tag_id 忽略；零引用标签照样写一行（缺行与零值是两种语义）。
+- 不含：标签 CRUD、引用来源去重、调度器、前端页面。

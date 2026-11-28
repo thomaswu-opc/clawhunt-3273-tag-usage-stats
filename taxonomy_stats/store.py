@@ -24,6 +24,12 @@ class MemoryStore:
     def add_ref(self, ref: TagRef) -> None:
         self.refs.append(ref)
 
+    def has_tag(self, tag_id: str) -> bool:
+        return tag_id in self.tags
+
+    def tag_ids_for_dict(self, dict_code: str) -> set[str]:
+        return {t for t, code in self.tags.items() if code == dict_code}
+
     # --- 统计结果 -------------------------------------------------------
     def replace_day(self, stat_date: date, rows: dict[str, TagStat]) -> None:
         key_date = stat_date.isoformat()
